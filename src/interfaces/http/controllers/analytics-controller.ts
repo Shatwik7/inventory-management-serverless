@@ -1,5 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { AnalyticsService } from "../../../application/services/analytics-service";
+import type { CogsValuationMethod } from "../../../domain/entities/inventory";
 import { badRequest, response, toIsoDate, toPositiveNumber } from "../../../shared/http";
 
 export class AnalyticsController {
@@ -30,6 +31,19 @@ export class AnalyticsController {
       return response(200, summary);
     } catch (error) {
       return badRequest(error instanceof Error ? error.message : "failed to fetch tax summary");
+    }
+  }
+
+  async marginAnalysis(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+    try {
+      const methodParam = (event.queryStringParameters?.method ?? "FIFO").toUpperCase();
+      if (methodParam !== "FIFO" && methodParam !== "WAC") {
+        return badRequest("method must be FIFO or WAC");
+      }
+      const result = await this.analyticsService.getMarginAnalysis(methodParam as CogsValuationMethod);
+      return response(200, result);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "failed to fetch margin analysis");
     }
   }
 }

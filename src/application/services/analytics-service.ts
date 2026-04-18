@@ -1,4 +1,6 @@
 import type { InventoryItem } from "../../domain/entities/inventory";
+import { computeMargin } from "../../domain/entities/inventory";
+import type { CogsValuationMethod, MarginResult } from "../../domain/entities/inventory";
 import type { InventoryRepository } from "../../domain/ports/inventory-repository";
 
 type DemandMetric = {
@@ -146,6 +148,39 @@ export class AnalyticsService {
         grossInputTax: inGst + vatIn + cessIn,
         grossOutputTax: outGst + vatOut + cessOut,
         netTaxPayable: gstPayable + vatPayable + cessPayable,
+      },
+    };
+  }
+
+  async getMarginAnalysis(method: CogsValuationMethod): Promise<{
+    method: CogsValuationMethod;
+    items: MarginResult[];
+    summary: {
+      totalRevenue: number;
+      totalCogs: number;
+      totalGrossProfit: number;
+      overallGrossMarginPct: number;
+    };
+  }> {
+    const items = await this.repository.findAll();
+    const results = items
+      .map((item) => computeMargin(item, method))
+      .sort((a, b) => b.grossMarginPct - a.grossMarginPct);
+
+    const totalRevenue = results.reduce((sum, r) => sum + r.revenue, 0);
+    const totalCogs = results.reduce((sum, r) => sum + r.cogs, 0);
+    const totalGrossProfit = totalRevenue - totalCogs;
+    const overallGrossMarginPct =
+      totalRevenue === 0 ? 0 : (totalGrossProfit / totalRevenue) * 100;
+
+    return {
+      method,
+      items: results,
+      summary: {
+        totalRevenue,
+        totalCogs,
+        totalGrossProfit,
+        overallGrossMarginPct,
       },
     };
   }

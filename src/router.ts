@@ -70,6 +70,7 @@ export async function route(event: APIGatewayProxyEventV2): Promise<APIGatewayPr
         "GET /inventory/expiring?days=7",
         "GET /analytics/demand?windowDays=30",
         "GET /analytics/tax-summary?from=ISO_DATE&to=ISO_DATE",
+        "GET /analytics/margin?method=FIFO|WAC",
         "GET /inventory/export",
         "POST /inventory/import",
       ],
@@ -117,6 +118,10 @@ export async function route(event: APIGatewayProxyEventV2): Promise<APIGatewayPr
 
   if (method === "GET" && path === "/analytics/tax-summary") {
     return appModule.analyticsController.taxSummary(event);
+  }
+
+  if (method === "GET" && path === "/analytics/margin") {
+    return appModule.analyticsController.marginAnalysis(event);
   }
 
   if (method === "GET" && path === "/inventory/export") {
