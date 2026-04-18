@@ -72,6 +72,7 @@ export async function route(event: APIGatewayProxyEventV2): Promise<APIGatewayPr
         "GET /analytics/tax-summary?from=ISO_DATE&to=ISO_DATE",
         "GET /analytics/margin?method=FIFO|WAC",
         "GET /analytics/reconciliation?date=2026-04-18",
+        "GET /analytics/cash-flow?forecastDays=14&demandWindowDays=30",
         "GET /finance/receivables?date=2026-04-18",
         "POST /customers/{id}/payments",
         "GET /inventory/export",
@@ -129,6 +130,10 @@ export async function route(event: APIGatewayProxyEventV2): Promise<APIGatewayPr
 
   if (method === "GET" && path === "/analytics/reconciliation") {
     return appModule.analyticsController.reconciliation(event);
+  }
+
+  if (method === "GET" && path === "/analytics/cash-flow") {
+    return appModule.analyticsController.cashFlowProjection(event);
   }
 
   if (method === "GET" && path === "/finance/receivables") {

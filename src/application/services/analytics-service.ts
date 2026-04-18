@@ -1,5 +1,5 @@
 import type { InventoryItem } from "../../domain/entities/inventory";
-import { computeMargin, PAYMENT_METHODS } from "../../domain/entities/inventory";
+import { computeMargin, PAYMENT_METHODS, summarizeStock } from "../../domain/entities/inventory";
 import type { CogsValuationMethod, MarginResult, PaymentMethod } from "../../domain/entities/inventory";
 import type { InventoryRepository } from "../../domain/ports/inventory-repository";
 
@@ -16,8 +16,71 @@ type DemandMetric = {
   demandScore: number;
 };
 
+type TaxTotals = {
+  inGst: number;
+  outGst: number;
+  gstPayable: number;
+  vatIn: number;
+  vatOut: number;
+  vatPayable: number;
+  cessIn: number;
+  cessOut: number;
+  cessPayable: number;
+  grossInputTax: number;
+  grossOutputTax: number;
+  netTaxPayable: number;
+};
+
 export class AnalyticsService {
   constructor(private readonly repository: InventoryRepository) {}
+
+  private computeTaxTotals(items: InventoryItem[], fromDate: Date, toDate: Date): TaxTotals {
+    let inGst = 0;
+    let outGst = 0;
+    let vatIn = 0;
+    let vatOut = 0;
+    let cessIn = 0;
+    let cessOut = 0;
+
+    for (const item of items) {
+      for (const purchase of item.purchases) {
+        const date = new Date(purchase.purchasedAt);
+        if (date >= fromDate && date <= toDate) {
+          inGst += purchase.tax.gstAmount;
+          vatIn += purchase.tax.vatAmount;
+          cessIn += purchase.tax.cessAmount;
+        }
+      }
+
+      for (const sale of item.sales) {
+        const date = new Date(sale.soldAt);
+        if (date >= fromDate && date <= toDate) {
+          outGst += sale.tax.gstAmount;
+          vatOut += sale.tax.vatAmount;
+          cessOut += sale.tax.cessAmount;
+        }
+      }
+    }
+
+    const gstPayable = outGst - inGst;
+    const vatPayable = vatOut - vatIn;
+    const cessPayable = cessOut - cessIn;
+
+    return {
+      inGst,
+      outGst,
+      gstPayable,
+      vatIn,
+      vatOut,
+      vatPayable,
+      cessIn,
+      cessOut,
+      cessPayable,
+      grossInputTax: inGst + vatIn + cessIn,
+      grossOutputTax: outGst + vatOut + cessOut,
+      netTaxPayable: gstPayable + vatPayable + cessPayable,
+    };
+  }
 
   private calcDemand(item: InventoryItem, windowDays: number): DemandMetric {
     const now = new Date();
@@ -81,73 +144,114 @@ export class AnalyticsService {
   async getTaxSummary(from: string, to: string): Promise<{
     from: string;
     to: string;
-    totals: {
-      inGst: number;
-      outGst: number;
-      gstPayable: number;
-      vatIn: number;
-      vatOut: number;
-      vatPayable: number;
-      cessIn: number;
-      cessOut: number;
-      cessPayable: number;
-      grossInputTax: number;
-      grossOutputTax: number;
-      netTaxPayable: number;
-    };
+    totals: TaxTotals;
   }> {
     const fromDate = new Date(from);
     const toDate = new Date(to);
 
     const items = await this.repository.findAll();
-
-    let inGst = 0;
-    let outGst = 0;
-    let vatIn = 0;
-    let vatOut = 0;
-    let cessIn = 0;
-    let cessOut = 0;
-
-    for (const item of items) {
-      for (const purchase of item.purchases) {
-        const date = new Date(purchase.purchasedAt);
-        if (date >= fromDate && date <= toDate) {
-          inGst += purchase.tax.gstAmount;
-          vatIn += purchase.tax.vatAmount;
-          cessIn += purchase.tax.cessAmount;
-        }
-      }
-
-      for (const sale of item.sales) {
-        const date = new Date(sale.soldAt);
-        if (date >= fromDate && date <= toDate) {
-          outGst += sale.tax.gstAmount;
-          vatOut += sale.tax.vatAmount;
-          cessOut += sale.tax.cessAmount;
-        }
-      }
-    }
-
-    const gstPayable = outGst - inGst;
-    const vatPayable = vatOut - vatIn;
-    const cessPayable = cessOut - cessIn;
+    const totals = this.computeTaxTotals(items, fromDate, toDate);
 
     return {
       from,
       to,
-      totals: {
-        inGst,
-        outGst,
-        gstPayable,
-        vatIn,
-        vatOut,
-        vatPayable,
-        cessIn,
-        cessOut,
-        cessPayable,
-        grossInputTax: inGst + vatIn + cessIn,
-        grossOutputTax: outGst + vatOut + cessOut,
-        netTaxPayable: gstPayable + vatPayable + cessPayable,
+      totals,
+    };
+  }
+
+  async getCashFlowProjection(forecastDays: number, demandWindowDays = 30): Promise<{
+    generatedAt: string;
+    forecastDays: number;
+    demandWindowDays: number;
+    reorder: {
+      totalEstimatedReorderCost: number;
+      itemsNeedingReorder: Array<{
+        itemId: string;
+        name: string;
+        category: string;
+        currentStock: number;
+        lowStockThreshold: number;
+        projectedDemandQty: number;
+        projectedStock: number;
+        requiredQty: number;
+        latestPurchasePrice: number;
+        estimatedReorderCost: number;
+      }>;
+    };
+    cashRequirementForecast: {
+      message: string;
+      nextDays: number;
+      requiredSpend: number;
+    };
+    taxLiabilityAccrual: {
+      from: string;
+      to: string;
+      totals: TaxTotals;
+    };
+  }> {
+    const items = await this.repository.findAll();
+
+    const demandByItem = new Map(items.map((item) => [item.itemId, this.calcDemand(item, demandWindowDays)]));
+    const itemsNeedingReorder = items
+      .map((item) => {
+        const stock = summarizeStock(item);
+        const threshold = item.lowStockThreshold ?? 0;
+        const demand = demandByItem.get(item.itemId);
+        const projectedDemandQty = (demand?.saleRatePerDay ?? 0) * forecastDays;
+        const projectedStock = stock.currentStock - projectedDemandQty;
+        const requiredQty = Math.max(0, threshold - projectedStock);
+
+        const latestPurchase = [...item.purchases].sort(
+          (a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime()
+        )[0];
+        const latestPurchasePrice = latestPurchase?.purchasePrice ?? 0;
+        const estimatedReorderCost = requiredQty * latestPurchasePrice;
+
+        return {
+          itemId: item.itemId,
+          name: item.name,
+          category: item.category,
+          currentStock: stock.currentStock,
+          lowStockThreshold: threshold,
+          projectedDemandQty,
+          projectedStock,
+          requiredQty,
+          latestPurchasePrice,
+          estimatedReorderCost,
+        };
+      })
+      .filter((item) => item.requiredQty > 0)
+      .sort((a, b) => b.estimatedReorderCost - a.estimatedReorderCost);
+
+    const totalEstimatedReorderCost = itemsNeedingReorder.reduce(
+      (sum, item) => sum + item.estimatedReorderCost,
+      0
+    );
+
+    const now = new Date();
+    const quarterStartMonth = Math.floor(now.getUTCMonth() / 3) * 3;
+    const quarterStart = new Date(Date.UTC(now.getUTCFullYear(), quarterStartMonth, 1));
+    const taxTotals = this.computeTaxTotals(items, quarterStart, now);
+
+    return {
+      generatedAt: now.toISOString(),
+      forecastDays,
+      demandWindowDays,
+      reorder: {
+        totalEstimatedReorderCost,
+        itemsNeedingReorder,
+      },
+      cashRequirementForecast: {
+        message: `Based on current demand trends, you will need to spend ${totalEstimatedReorderCost.toFixed(
+          2
+        )} on restocking in the next ${forecastDays} days.`,
+        nextDays: forecastDays,
+        requiredSpend: totalEstimatedReorderCost,
+      },
+      taxLiabilityAccrual: {
+        from: quarterStart.toISOString(),
+        to: now.toISOString(),
+        totals: taxTotals,
       },
     };
   }

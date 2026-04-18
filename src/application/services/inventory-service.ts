@@ -20,6 +20,7 @@ type CreateItemInput = {
   name: string;
   category?: string;
   unit?: string;
+  lowStockThreshold?: number;
   isPerishable?: boolean;
   taxProfile?: Partial<TaxProfile>;
 };
@@ -59,6 +60,7 @@ export class InventoryService {
       name: input.name.trim(),
       category: input.category?.trim() || "general",
       unit: input.unit?.trim() || "unit",
+      lowStockThreshold: input.lowStockThreshold ?? 0,
       isPerishable: Boolean(input.isPerishable),
       taxProfile: {
         ...defaultTaxProfile,

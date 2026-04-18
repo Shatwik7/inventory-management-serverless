@@ -50,6 +50,7 @@ export type InventoryItem = {
   name: string;
   category: string;
   unit: string;
+  lowStockThreshold?: number;
   isPerishable: boolean;
   taxProfile: TaxProfile;
   purchases: PurchaseBatch[];

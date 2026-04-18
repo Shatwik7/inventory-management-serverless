@@ -8,6 +8,7 @@ type ItemRow = {
   name: string;
   category: string;
   unit: string;
+  lowStockThreshold?: number;
   isPerishable: boolean;
   gstRate: number;
   vatRate: number;
@@ -26,6 +27,7 @@ export class XlsxExcelService implements ExcelService {
       name: item.name,
       category: item.category,
       unit: item.unit,
+      lowStockThreshold: item.lowStockThreshold ?? 0,
       isPerishable: item.isPerishable,
       gstRate: item.taxProfile.gstRate,
       vatRate: item.taxProfile.vatRate,
@@ -83,6 +85,7 @@ export class XlsxExcelService implements ExcelService {
         name: String(row.name),
         category: String(row.category || "general"),
         unit: String(row.unit || "unit"),
+        lowStockThreshold: Number(row.lowStockThreshold || 0),
         isPerishable: Boolean(row.isPerishable),
         taxProfile: {
           gstRate: Number(row.gstRate || 0),

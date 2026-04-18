@@ -15,6 +15,7 @@ type CreateItemBody = {
   name?: string;
   category?: string;
   unit?: string;
+  lowStockThreshold?: number;
   isPerishable?: boolean;
   taxProfile?: {
     gstRate?: number;
@@ -65,6 +66,10 @@ export class InventoryController {
         name: body.name,
         category: body.category,
         unit: body.unit,
+        lowStockThreshold:
+          body.lowStockThreshold === undefined
+            ? undefined
+            : toNonNegativeNumber(body.lowStockThreshold, "lowStockThreshold"),
         isPerishable: body.isPerishable,
         taxProfile: {
           gstRate: body.taxProfile?.gstRate

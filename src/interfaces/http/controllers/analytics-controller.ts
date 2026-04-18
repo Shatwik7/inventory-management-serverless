@@ -60,4 +60,18 @@ export class AnalyticsController {
       return badRequest(error instanceof Error ? error.message : "failed to fetch reconciliation");
     }
   }
+
+  async cashFlowProjection(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+    try {
+      const forecastDays = toPositiveNumber(event.queryStringParameters?.forecastDays || 14, "forecastDays");
+      const demandWindowDays = toPositiveNumber(
+        event.queryStringParameters?.demandWindowDays || 30,
+        "demandWindowDays"
+      );
+      const result = await this.analyticsService.getCashFlowProjection(forecastDays, demandWindowDays);
+      return response(200, result);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "failed to fetch cash flow projection");
+    }
+  }
 }
