@@ -37,6 +37,7 @@ type AddSaleBody = {
   salePrice?: number;
   market?: string;
   soldAt?: string;
+  paymentMethod?: string;
 };
 
 type ImportBody = {
@@ -126,6 +127,7 @@ export class InventoryController {
         salePrice: toPositiveNumber(body.salePrice, "salePrice"),
         market: body.market,
         soldAt: body.soldAt ? toIsoDate(body.soldAt, "soldAt") : undefined,
+        paymentMethod: body.paymentMethod as import("../../../domain/entities/inventory").PaymentMethod | undefined,
       });
 
       return response(200, updated);

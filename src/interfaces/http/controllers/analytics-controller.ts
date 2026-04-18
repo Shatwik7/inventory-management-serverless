@@ -46,4 +46,18 @@ export class AnalyticsController {
       return badRequest(error instanceof Error ? error.message : "failed to fetch margin analysis");
     }
   }
+
+  async reconciliation(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+    try {
+      const dateParam = event.queryStringParameters?.date ?? new Date().toISOString().slice(0, 10);
+      const parsed = new Date(dateParam);
+      if (Number.isNaN(parsed.getTime())) {
+        return badRequest("date must be a valid date (e.g. 2026-04-18)");
+      }
+      const result = await this.analyticsService.getReconciliation(dateParam);
+      return response(200, result);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "failed to fetch reconciliation");
+    }
+  }
 }

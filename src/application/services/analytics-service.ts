@@ -1,6 +1,6 @@
 import type { InventoryItem } from "../../domain/entities/inventory";
-import { computeMargin } from "../../domain/entities/inventory";
-import type { CogsValuationMethod, MarginResult } from "../../domain/entities/inventory";
+import { computeMargin, PAYMENT_METHODS } from "../../domain/entities/inventory";
+import type { CogsValuationMethod, MarginResult, PaymentMethod } from "../../domain/entities/inventory";
 import type { InventoryRepository } from "../../domain/ports/inventory-repository";
 
 type DemandMetric = {
@@ -183,5 +183,36 @@ export class AnalyticsService {
         overallGrossMarginPct,
       },
     };
+  }
+
+  async getReconciliation(date: string): Promise<{
+    date: string;
+    byMethod: Record<PaymentMethod, { totalSales: number; totalRevenue: number }>;
+    grandTotal: number;
+  }> {
+    const dayStart = new Date(date);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setUTCHours(23, 59, 59, 999);
+
+    const items = await this.repository.findAll();
+
+    const byMethod = Object.fromEntries(
+      PAYMENT_METHODS.map((m) => [m, { totalSales: 0, totalRevenue: 0 }])
+    ) as Record<PaymentMethod, { totalSales: number; totalRevenue: number }>;
+
+    for (const item of items) {
+      for (const sale of item.sales) {
+        const soldAt = new Date(sale.soldAt);
+        if (soldAt < dayStart || soldAt > dayEnd) continue;
+        const method = sale.paymentMethod ?? "CASH";
+        byMethod[method].totalSales += 1;
+        byMethod[method].totalRevenue += sale.quantity * sale.salePrice;
+      }
+    }
+
+    const grandTotal = Object.values(byMethod).reduce((sum, m) => sum + m.totalRevenue, 0);
+
+    return { date: dayStart.toISOString().slice(0, 10), byMethod, grandTotal };
   }
 }

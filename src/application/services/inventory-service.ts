@@ -1,10 +1,12 @@
 import { randomUUID } from "crypto";
 import {
   defaultTaxProfile,
+  PAYMENT_METHODS,
   summarizeStock,
   withComputedFields,
   type InventoryItem,
   type ItemWithComputedFields,
+  type PaymentMethod,
   type TaxProfile,
 } from "../../domain/entities/inventory";
 import type { InventoryRepository } from "../../domain/ports/inventory-repository";
@@ -31,6 +33,7 @@ type AddSaleInput = {
   salePrice: number;
   market?: string;
   soldAt?: string;
+  paymentMethod?: PaymentMethod;
 };
 
 export class InventoryService {
@@ -112,12 +115,17 @@ export class InventoryService {
 
     const tax = this.taxService.calculate(input.salePrice, input.quantity, item.taxProfile);
 
+    const paymentMethod: PaymentMethod = PAYMENT_METHODS.includes(input.paymentMethod as PaymentMethod)
+      ? (input.paymentMethod as PaymentMethod)
+      : "CASH";
+
     item.sales.push({
       saleId: randomUUID(),
       quantity: input.quantity,
       salePrice: input.salePrice,
       market: input.market || "unknown",
       soldAt: input.soldAt || new Date().toISOString(),
+      paymentMethod,
       tax,
     });
     item.updatedAt = new Date().toISOString();

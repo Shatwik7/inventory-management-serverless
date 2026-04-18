@@ -24,12 +24,16 @@ export type PurchaseBatch = {
   tax: TaxBreakdown;
 };
 
+export const PAYMENT_METHODS = ["CASH", "UPI", "CARD", "CREDIT"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
 export type SaleEntry = {
   saleId: string;
   quantity: number;
   salePrice: number;
   market: string;
   soldAt: string;
+  paymentMethod: PaymentMethod;
   tax: TaxBreakdown;
 };
 
