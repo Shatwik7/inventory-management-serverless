@@ -206,8 +206,10 @@ export class AnalyticsService {
         const soldAt = new Date(sale.soldAt);
         if (soldAt < dayStart || soldAt > dayEnd) continue;
         const method = sale.paymentMethod ?? "CASH";
+        const saleTotal = sale.quantity * sale.salePrice;
+        const collectedAmount = sale.amountPaid ?? saleTotal;
         byMethod[method].totalSales += 1;
-        byMethod[method].totalRevenue += sale.quantity * sale.salePrice;
+        byMethod[method].totalRevenue += collectedAmount;
       }
     }
 

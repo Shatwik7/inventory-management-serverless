@@ -10,6 +10,7 @@ provider:
   runtime: nodejs20.x
   environment:
     INVENTORY_TABLE: ${self:service}-${sls:stage}-inventory
+    CUSTOMER_TABLE: ${self:service}-${sls:stage}-customers
     CONFIG_TABLE: ${self:service}-${sls:stage}-config
     AUTH_JWT_SECRET: ${env:AUTH_JWT_SECRET, 'local-dev-change-me'}
   iam:
@@ -27,6 +28,9 @@ provider:
             - Fn::GetAtt:
                 - ConfigTable
                 - Arn
+            - Fn::GetAtt:
+              - CustomerTable
+              - Arn
   # Uncomment to easily set up a custom domain. Read the docs for more details:
   # https://www.serverless.com/framework/docs/providers/aws/guide/domains
   # domain: api.example.com
@@ -73,4 +77,15 @@ resources:
             AttributeType: S
         KeySchema:
           - AttributeName: configKey
+            KeyType: HASH
+    CustomerTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CUSTOMER_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: customerId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: customerId
             KeyType: HASH

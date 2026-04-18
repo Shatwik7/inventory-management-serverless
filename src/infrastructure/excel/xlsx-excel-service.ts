@@ -1,5 +1,6 @@
 import XLSX from "xlsx";
-import type { InventoryItem } from "../../domain/entities/inventory";
+import { PAYMENT_METHODS, PAYMENT_STATUSES } from "../../domain/entities/inventory";
+import type { InventoryItem, PaymentMethod, PaymentStatus } from "../../domain/entities/inventory";
 import type { ExcelService, InventoryImportResult } from "../../domain/ports/excel-service";
 
 type ItemRow = {
@@ -134,6 +135,19 @@ export class XlsxExcelService implements ExcelService {
         salePrice: Number(row.salePrice || 0),
         market: String(row.market || "unknown"),
         soldAt: String(row.soldAt || new Date().toISOString()),
+        paymentMethod: PAYMENT_METHODS.includes(String(row.paymentMethod) as PaymentMethod)
+          ? (String(row.paymentMethod) as PaymentMethod)
+          : "CASH",
+        paymentStatus: PAYMENT_STATUSES.includes(String(row.paymentStatus) as PaymentStatus)
+          ? (String(row.paymentStatus) as PaymentStatus)
+          : "PAID",
+        amountPaid:
+          row.amountPaid !== undefined
+            ? Number(row.amountPaid)
+            : Number(row.quantity || 0) * Number(row.salePrice || 0),
+        outstandingAmount: Number(row.outstandingAmount || 0),
+        customerId: row.customerId ? String(row.customerId) : undefined,
+        customerName: row.customerName ? String(row.customerName) : undefined,
         tax: {
           taxableAmount: Number(row.taxableAmount || 0),
           gstAmount: Number(row.gstAmount || 0),

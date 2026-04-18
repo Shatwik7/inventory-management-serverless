@@ -27,6 +27,9 @@ export type PurchaseBatch = {
 export const PAYMENT_METHODS = ["CASH", "UPI", "CARD", "CREDIT"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+export const PAYMENT_STATUSES = ["PAID", "UNPAID", "PARTIALLY_PAID"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
 export type SaleEntry = {
   saleId: string;
   quantity: number;
@@ -34,6 +37,11 @@ export type SaleEntry = {
   market: string;
   soldAt: string;
   paymentMethod: PaymentMethod;
+  paymentStatus?: PaymentStatus;
+  amountPaid?: number;
+  outstandingAmount?: number;
+  customerId?: string;
+  customerName?: string;
   tax: TaxBreakdown;
 };
 

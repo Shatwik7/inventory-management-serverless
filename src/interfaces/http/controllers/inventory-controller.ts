@@ -38,6 +38,10 @@ type AddSaleBody = {
   market?: string;
   soldAt?: string;
   paymentMethod?: string;
+  paymentStatus?: string;
+  amountPaid?: number;
+  customerId?: string;
+  customerName?: string;
 };
 
 type ImportBody = {
@@ -128,6 +132,13 @@ export class InventoryController {
         market: body.market,
         soldAt: body.soldAt ? toIsoDate(body.soldAt, "soldAt") : undefined,
         paymentMethod: body.paymentMethod as import("../../../domain/entities/inventory").PaymentMethod | undefined,
+        paymentStatus: body.paymentStatus as import("../../../domain/entities/inventory").PaymentStatus | undefined,
+        amountPaid:
+          body.amountPaid === undefined
+            ? undefined
+            : toNonNegativeNumber(body.amountPaid, "amountPaid"),
+        customerId: body.customerId,
+        customerName: body.customerName,
       });
 
       return response(200, updated);
@@ -137,6 +148,15 @@ export class InventoryController {
       }
       if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") {
         return badRequest("not enough stock for this sale");
+      }
+      if (error instanceof Error && error.message === "CUSTOMER_ID_REQUIRED_FOR_CREDIT_SALE") {
+        return badRequest("customerId is required for unpaid or partially paid sales");
+      }
+      if (error instanceof Error && error.message === "INVALID_AMOUNT_PAID") {
+        return badRequest("amountPaid must be between 0 and total sale amount");
+      }
+      if (error instanceof Error && error.message === "CUSTOMER_LEDGER_UNAVAILABLE") {
+        return badRequest("customer ledger is unavailable");
       }
       return badRequest(error instanceof Error ? error.message : "failed to add sale");
     }
