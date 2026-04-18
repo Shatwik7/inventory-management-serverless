@@ -28,9 +28,11 @@ jest.mock("../../src/infrastructure/dynamodb/client", () => ({
 
 describe("Lambda API (e2e)", () => {
 	const inventoryTable = "shop-test-inventory";
+	const customerTable = "shop-test-customers";
 	const configTable = "shop-test-config";
 
 	const inventoryStore = new Map<string, InventoryRecord>();
+	const customerStore = new Map<string, InventoryRecord>();
 	const configStore = new Map<string, InventoryRecord>();
 
 	let sendMock: jest.Mock;
@@ -38,9 +40,11 @@ describe("Lambda API (e2e)", () => {
 	beforeEach(() => {
 		jest.resetModules();
 		inventoryStore.clear();
+		customerStore.clear();
 		configStore.clear();
 
 		process.env.INVENTORY_TABLE = inventoryTable;
+		process.env.CUSTOMER_TABLE = customerTable;
 		process.env.CONFIG_TABLE = configTable;
 		process.env.AUTH_JWT_SECRET = "test-secret";
 
@@ -66,6 +70,11 @@ describe("Lambda API (e2e)", () => {
 					configStore.set(item.configKey, structuredClone(item));
 					return {};
 				}
+
+				if (table === customerTable) {
+					customerStore.set(item.customerId, structuredClone(item));
+					return {};
+				}
 			}
 
 			if (commandName === "GetCommand") {
@@ -84,6 +93,12 @@ describe("Lambda API (e2e)", () => {
 						Item: configStore.get(key.configKey),
 					};
 				}
+
+				if (table === customerTable) {
+					return {
+						Item: customerStore.get(key.customerId),
+					};
+				}
 			}
 
 			if (commandName === "ScanCommand") {
@@ -93,6 +108,12 @@ describe("Lambda API (e2e)", () => {
 				if (table === inventoryTable) {
 					return {
 						Items: [...inventoryStore.values()].map((v) => structuredClone(v)),
+					};
+				}
+
+				if (table === customerTable) {
+					return {
+						Items: [...customerStore.values()].map((v) => structuredClone(v)),
 					};
 				}
 			}

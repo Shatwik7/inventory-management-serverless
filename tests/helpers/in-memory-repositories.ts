@@ -1,6 +1,8 @@
 import type { OwnerCredentials } from "../../src/domain/entities/auth";
+import type { Customer } from "../../src/domain/entities/customer";
 import type { InventoryItem } from "../../src/domain/entities/inventory";
 import type { ConfigRepository } from "../../src/domain/ports/config-repository";
+import type { CustomerRepository } from "../../src/domain/ports/customer-repository";
 import type { InventoryRepository } from "../../src/domain/ports/inventory-repository";
 
 export class InMemoryInventoryRepository implements InventoryRepository {
@@ -33,5 +35,26 @@ export class InMemoryConfigRepository implements ConfigRepository {
 
   async setOwnerCredentials(owner: OwnerCredentials): Promise<void> {
     this.owner = structuredClone(owner);
+  }
+}
+
+export class InMemoryCustomerRepository implements CustomerRepository {
+  private readonly store = new Map<string, Customer>();
+
+  async create(customer: Customer): Promise<void> {
+    this.store.set(customer.customerId, structuredClone(customer));
+  }
+
+  async update(customer: Customer): Promise<void> {
+    this.store.set(customer.customerId, structuredClone(customer));
+  }
+
+  async findById(customerId: string): Promise<Customer | null> {
+    const customer = this.store.get(customerId);
+    return customer ? structuredClone(customer) : null;
+  }
+
+  async findAll(): Promise<Customer[]> {
+    return [...this.store.values()].map((customer) => structuredClone(customer));
   }
 }
