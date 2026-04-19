@@ -12,6 +12,8 @@ function makeInventoryItem(sales: InventoryItem["sales"]): InventoryItem {
     taxProfile: { gstRate: 0, vatRate: 0, cessRate: 0 },
     purchases: [],
     sales,
+    vendorReturns: [],
+    vendorSkuMappings: [],
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
@@ -166,5 +168,53 @@ describe("FinanceService", () => {
     expect(older?.paymentStatus).toBe("PAID");
     expect(newer?.outstandingAmount).toBe(100);
     expect(newer?.paymentStatus).toBe("PARTIALLY_PAID");
+  });
+
+  it("builds payables from outstanding vendor purchase balances", async () => {
+    const inventoryRepository = new InMemoryInventoryRepository();
+    const customerRepository = new InMemoryCustomerRepository();
+
+    await inventoryRepository.create({
+      ...makeInventoryItem([]),
+      itemId: "item-payables",
+      purchases: [
+        {
+          purchaseId: "p1",
+          quantity: 10,
+          purchasePrice: 100,
+          market: "m",
+          purchasedAt: "2026-04-10T00:00:00.000Z",
+          vendorId: "v1",
+          vendorName: "Vendor One",
+          paymentStatus: "PARTIALLY_PAID",
+          amountPaid: 300,
+          outstandingAmount: 700,
+          tax: taxZero,
+        },
+        {
+          purchaseId: "p2",
+          quantity: 5,
+          purchasePrice: 100,
+          market: "m",
+          purchasedAt: "2026-04-12T00:00:00.000Z",
+          vendorId: "v1",
+          vendorName: "Vendor One",
+          paymentStatus: "UNPAID",
+          amountPaid: 0,
+          outstandingAmount: 500,
+          tax: taxZero,
+        },
+      ],
+    });
+
+    const service = new FinanceService(inventoryRepository, customerRepository);
+    const result = await service.getPayables("2026-04-18");
+
+    expect(result.creditors).toHaveLength(1);
+    expect(result.creditors[0].vendorId).toBe("v1");
+    expect(result.creditors[0].currentPayable).toBe(1200);
+    expect(result.creditors[0].outstandingBills).toBe(2);
+    expect(result.totals.totalPayable).toBe(1200);
+    expect(result.totals.totalBills).toBe(2);
   });
 });
