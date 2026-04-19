@@ -20,6 +20,14 @@ export type PurchaseBatch = {
   purchasePrice: number;
   market: string;
   purchasedAt: string;
+  vendorId?: string;
+  vendorName?: string;
+  orderCreatedAt?: string;
+  promisedDeliveryAt?: string;
+  deliveredAt?: string;
+  paymentStatus?: PaymentStatus;
+  amountPaid?: number;
+  outstandingAmount?: number;
   expiresAt?: string;
   tax: TaxBreakdown;
 };
@@ -45,6 +53,32 @@ export type SaleEntry = {
   tax: TaxBreakdown;
 };
 
+export type VendorReturnEntry = {
+  returnId: string;
+  purchaseId?: string;
+  vendorId: string;
+  vendorName?: string;
+  quantity: number;
+  reason: "FAULTY" | "EXPIRED" | "DAMAGED" | "OTHER";
+  note?: string;
+  returnedAt: string;
+  debitNoteNumber: string;
+  creditAmount: number;
+  taxReversal: {
+    gstAmount: number;
+    vatAmount: number;
+    cessAmount: number;
+    totalTax: number;
+  };
+};
+
+export type VendorSkuMapping = {
+  vendorId: string;
+  vendorSku: string;
+  vendorItemName?: string;
+  updatedAt: string;
+};
+
 export type InventoryItem = {
   itemId: string;
   name: string;
@@ -55,6 +89,8 @@ export type InventoryItem = {
   taxProfile: TaxProfile;
   purchases: PurchaseBatch[];
   sales: SaleEntry[];
+  vendorReturns: VendorReturnEntry[];
+  vendorSkuMappings: VendorSkuMapping[];
   createdAt: string;
   updatedAt: string;
 };
@@ -90,11 +126,12 @@ export const defaultTaxProfile: TaxProfile = {
 export function summarizeStock(item: InventoryItem): StockSummary {
   const totalPurchased = item.purchases.reduce((sum, row) => sum + row.quantity, 0);
   const totalSold = item.sales.reduce((sum, row) => sum + row.quantity, 0);
+  const totalReturned = (item.vendorReturns || []).reduce((sum, row) => sum + row.quantity, 0);
 
   return {
     totalPurchased,
     totalSold,
-    currentStock: totalPurchased - totalSold,
+    currentStock: totalPurchased - totalSold - totalReturned,
   };
 }
 

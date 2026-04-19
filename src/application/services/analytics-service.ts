@@ -31,6 +31,16 @@ type TaxTotals = {
   netTaxPayable: number;
 };
 
+type VendorPerformance = {
+  vendorId: string;
+  vendorName: string;
+  deliveries: number;
+  onTimeDeliveries: number;
+  reliabilityScore: number;
+  averageLeadTimeDays: number;
+  averageLeadTimeVarianceDays: number;
+};
+
 export class AnalyticsService {
   constructor(private readonly repository: InventoryRepository) {}
 
@@ -49,6 +59,15 @@ export class AnalyticsService {
           inGst += purchase.tax.gstAmount;
           vatIn += purchase.tax.vatAmount;
           cessIn += purchase.tax.cessAmount;
+        }
+      }
+
+      for (const vendorReturn of item.vendorReturns || []) {
+        const date = new Date(vendorReturn.returnedAt);
+        if (date >= fromDate && date <= toDate) {
+          inGst -= vendorReturn.taxReversal.gstAmount;
+          vatIn -= vendorReturn.taxReversal.vatAmount;
+          cessIn -= vendorReturn.taxReversal.cessAmount;
         }
       }
 
@@ -156,6 +175,84 @@ export class AnalyticsService {
       from,
       to,
       totals,
+    };
+  }
+
+  async getVendorPerformance(from: string, to: string): Promise<{
+    from: string;
+    to: string;
+    vendors: VendorPerformance[];
+  }> {
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    const items = await this.repository.findAll();
+
+    const performanceMap = new Map<
+      string,
+      {
+        vendorName: string;
+        deliveries: number;
+        onTimeDeliveries: number;
+        totalLeadTimeDays: number;
+        totalLeadTimeVarianceDays: number;
+      }
+    >();
+
+    for (const item of items) {
+      for (const purchase of item.purchases) {
+        if (!purchase.vendorId || !purchase.orderCreatedAt) {
+          continue;
+        }
+
+        const deliveredAt = new Date(purchase.deliveredAt || purchase.purchasedAt);
+        if (deliveredAt < fromDate || deliveredAt > toDate) {
+          continue;
+        }
+
+        const createdAt = new Date(purchase.orderCreatedAt);
+        const promisedAt = purchase.promisedDeliveryAt ? new Date(purchase.promisedDeliveryAt) : null;
+        const leadTimeDays = (deliveredAt.getTime() - createdAt.getTime()) / (24 * 3600 * 1000);
+
+        const existing = performanceMap.get(purchase.vendorId) || {
+          vendorName: purchase.vendorName || purchase.vendorId,
+          deliveries: 0,
+          onTimeDeliveries: 0,
+          totalLeadTimeDays: 0,
+          totalLeadTimeVarianceDays: 0,
+        };
+
+        existing.deliveries += 1;
+        existing.totalLeadTimeDays += leadTimeDays;
+
+        if (promisedAt) {
+          const variance = (deliveredAt.getTime() - promisedAt.getTime()) / (24 * 3600 * 1000);
+          existing.totalLeadTimeVarianceDays += variance;
+          if (variance <= 0) {
+            existing.onTimeDeliveries += 1;
+          }
+        }
+
+        performanceMap.set(purchase.vendorId, existing);
+      }
+    }
+
+    const vendors: VendorPerformance[] = [...performanceMap.entries()]
+      .map(([vendorId, perf]) => ({
+        vendorId,
+        vendorName: perf.vendorName,
+        deliveries: perf.deliveries,
+        onTimeDeliveries: perf.onTimeDeliveries,
+        reliabilityScore: perf.deliveries === 0 ? 0 : (perf.onTimeDeliveries / perf.deliveries) * 100,
+        averageLeadTimeDays: perf.deliveries === 0 ? 0 : perf.totalLeadTimeDays / perf.deliveries,
+        averageLeadTimeVarianceDays:
+          perf.deliveries === 0 ? 0 : perf.totalLeadTimeVarianceDays / perf.deliveries,
+      }))
+      .sort((a, b) => b.reliabilityScore - a.reliabilityScore);
+
+    return {
+      from,
+      to,
+      vendors,
     };
   }
 

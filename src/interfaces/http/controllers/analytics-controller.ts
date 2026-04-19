@@ -16,6 +16,24 @@ export class AnalyticsController {
     }
   }
 
+  async vendorPerformance(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+    try {
+      const now = new Date();
+      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+      const from = event.queryStringParameters?.from
+        ? toIsoDate(event.queryStringParameters.from, "from")
+        : monthStart;
+      const to = event.queryStringParameters?.to
+        ? toIsoDate(event.queryStringParameters.to, "to")
+        : now.toISOString();
+
+      const performance = await this.analyticsService.getVendorPerformance(from, to);
+      return response(200, performance);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "failed to fetch vendor performance");
+    }
+  }
+
   async taxSummary(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
     try {
       const now = new Date();

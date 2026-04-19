@@ -67,13 +67,17 @@ export async function route(event: APIGatewayProxyEventV2): Promise<APIGatewayPr
         "GET /items/{itemId}",
         "POST /items/{itemId}/purchases",
         "POST /items/{itemId}/sales",
+        "POST /items/{itemId}/vendor-returns",
+        "PUT /items/{itemId}/vendor-sku-mappings",
         "GET /inventory/expiring?days=7",
         "GET /analytics/demand?windowDays=30",
+        "GET /analytics/vendors/performance?from=ISO_DATE&to=ISO_DATE",
         "GET /analytics/tax-summary?from=ISO_DATE&to=ISO_DATE",
         "GET /analytics/margin?method=FIFO|WAC",
         "GET /analytics/reconciliation?date=2026-04-18",
         "GET /analytics/cash-flow?forecastDays=14&demandWindowDays=30",
         "GET /finance/receivables?date=2026-04-18",
+        "GET /finance/payables?date=2026-04-18",
         "POST /customers/{id}/payments",
         "GET /inventory/export",
         "POST /inventory/import",
@@ -112,12 +116,26 @@ export async function route(event: APIGatewayProxyEventV2): Promise<APIGatewayPr
     return appModule.inventoryController.addSale(itemSale[1], event);
   }
 
+  const itemVendorReturn = path.match(/^\/items\/([^/]+)\/vendor-returns$/);
+  if (method === "POST" && itemVendorReturn) {
+    return appModule.inventoryController.addVendorReturn(itemVendorReturn[1], event);
+  }
+
+  const itemVendorMapping = path.match(/^\/items\/([^/]+)\/vendor-sku-mappings$/);
+  if (method === "PUT" && itemVendorMapping) {
+    return appModule.inventoryController.upsertVendorSkuMapping(itemVendorMapping[1], event);
+  }
+
   if (method === "GET" && path === "/inventory/expiring") {
     return appModule.inventoryController.expiring(event);
   }
 
   if (method === "GET" && path === "/analytics/demand") {
     return appModule.analyticsController.demand(event);
+  }
+
+  if (method === "GET" && path === "/analytics/vendors/performance") {
+    return appModule.analyticsController.vendorPerformance(event);
   }
 
   if (method === "GET" && path === "/analytics/tax-summary") {
@@ -138,6 +156,10 @@ export async function route(event: APIGatewayProxyEventV2): Promise<APIGatewayPr
 
   if (method === "GET" && path === "/finance/receivables") {
     return appModule.financeController.receivables(event);
+  }
+
+  if (method === "GET" && path === "/finance/payables") {
+    return appModule.financeController.payables(event);
   }
 
   const customerPayment = path.match(/^\/customers\/([^/]+)\/payments$/);

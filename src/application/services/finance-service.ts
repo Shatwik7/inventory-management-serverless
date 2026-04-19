@@ -18,6 +18,14 @@ type Debtor = {
   aging: Aging;
 };
 
+type Creditor = {
+  vendorId: string;
+  vendorName: string;
+  currentPayable: number;
+  outstandingBills: number;
+  oldestBillDate: string | null;
+};
+
 export class FinanceService {
   constructor(
     private readonly inventoryRepository: InventoryRepository,
@@ -112,6 +120,67 @@ export class FinanceService {
       date: asOf.toISOString().slice(0, 10),
       debtors,
       totals,
+    };
+  }
+
+  async getPayables(date: string): Promise<{
+    date: string;
+    creditors: Creditor[];
+    totals: { totalPayable: number; totalCreditors: number; totalBills: number };
+  }> {
+    const asOf = new Date(date);
+    if (Number.isNaN(asOf.getTime())) {
+      throw new Error("INVALID_DATE");
+    }
+
+    const items = await this.inventoryRepository.findAll();
+    const byVendor = new Map<string, Creditor>();
+    let totalBills = 0;
+
+    for (const item of items) {
+      for (const purchase of item.purchases) {
+        const payable = purchase.outstandingAmount ?? 0;
+        if (payable <= 0 || !purchase.vendorId) {
+          continue;
+        }
+
+        const purchasedAt = new Date(purchase.purchasedAt);
+        if (purchasedAt > asOf) {
+          continue;
+        }
+
+        if (!byVendor.has(purchase.vendorId)) {
+          byVendor.set(purchase.vendorId, {
+            vendorId: purchase.vendorId,
+            vendorName: purchase.vendorName || purchase.vendorId,
+            currentPayable: 0,
+            outstandingBills: 0,
+            oldestBillDate: null,
+          });
+        }
+
+        const entry = byVendor.get(purchase.vendorId)!;
+        entry.currentPayable += payable;
+        entry.outstandingBills += 1;
+        totalBills += 1;
+
+        if (!entry.oldestBillDate || purchasedAt.toISOString() < entry.oldestBillDate) {
+          entry.oldestBillDate = purchasedAt.toISOString();
+        }
+      }
+    }
+
+    const creditors = [...byVendor.values()].sort((a, b) => b.currentPayable - a.currentPayable);
+    const totalPayable = creditors.reduce((sum, creditor) => sum + creditor.currentPayable, 0);
+
+    return {
+      date: asOf.toISOString().slice(0, 10),
+      creditors,
+      totals: {
+        totalPayable,
+        totalCreditors: creditors.length,
+        totalBills,
+      },
     };
   }
 

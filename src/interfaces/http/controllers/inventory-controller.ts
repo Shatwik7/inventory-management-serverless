@@ -30,6 +30,13 @@ type AddPurchaseBody = {
   purchasePrice?: number;
   market?: string;
   purchasedAt?: string;
+  deliveredAt?: string;
+  orderCreatedAt?: string;
+  promisedDeliveryAt?: string;
+  vendorId?: string;
+  vendorName?: string;
+  paymentStatus?: string;
+  amountPaid?: number;
   expiresAt?: string;
 };
 
@@ -47,6 +54,22 @@ type AddSaleBody = {
 
 type ImportBody = {
   fileBase64?: string;
+};
+
+type VendorReturnBody = {
+  quantity?: number;
+  vendorId?: string;
+  vendorName?: string;
+  returnedAt?: string;
+  reason?: "FAULTY" | "EXPIRED" | "DAMAGED" | "OTHER";
+  note?: string;
+  debitNoteNumber?: string;
+};
+
+type VendorSkuMappingBody = {
+  vendorId?: string;
+  vendorSku?: string;
+  vendorItemName?: string;
 };
 
 export class InventoryController {
@@ -112,6 +135,20 @@ export class InventoryController {
         quantity: toPositiveNumber(body.quantity, "quantity"),
         purchasePrice: toPositiveNumber(body.purchasePrice, "purchasePrice"),
         market: body.market,
+        deliveredAt: body.deliveredAt ? toIsoDate(body.deliveredAt, "deliveredAt") : undefined,
+        orderCreatedAt: body.orderCreatedAt
+          ? toIsoDate(body.orderCreatedAt, "orderCreatedAt")
+          : undefined,
+        promisedDeliveryAt: body.promisedDeliveryAt
+          ? toIsoDate(body.promisedDeliveryAt, "promisedDeliveryAt")
+          : undefined,
+        vendorId: body.vendorId,
+        vendorName: body.vendorName,
+        paymentStatus: body.paymentStatus as import("../../../domain/entities/inventory").PaymentStatus | undefined,
+        amountPaid:
+          body.amountPaid === undefined
+            ? undefined
+            : toNonNegativeNumber(body.amountPaid, "amountPaid"),
         purchasedAt: body.purchasedAt ? toIsoDate(body.purchasedAt, "purchasedAt") : undefined,
         expiresAt: body.expiresAt ? toIsoDate(body.expiresAt, "expiresAt") : undefined,
       });
@@ -204,6 +241,65 @@ export class InventoryController {
       });
     } catch (error) {
       return badRequest(error instanceof Error ? error.message : "failed to import inventory");
+    }
+  }
+
+  async addVendorReturn(itemId: string, event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+    try {
+      const body = parseBody<VendorReturnBody>(event);
+      if (!body.vendorId || typeof body.vendorId !== "string") {
+        return badRequest("vendorId is required");
+      }
+
+      const updated = await this.inventoryService.addVendorReturn(itemId, {
+        quantity: toPositiveNumber(body.quantity, "quantity"),
+        vendorId: body.vendorId,
+        vendorName: body.vendorName,
+        returnedAt: body.returnedAt ? toIsoDate(body.returnedAt, "returnedAt") : undefined,
+        reason: body.reason,
+        note: body.note,
+        debitNoteNumber: body.debitNoteNumber,
+      });
+
+      return response(200, updated);
+    } catch (error) {
+      if (error instanceof Error && error.message === "ITEM_NOT_FOUND") {
+        return notFound("item not found");
+      }
+      if (error instanceof Error && error.message === "INSUFFICIENT_STOCK") {
+        return badRequest("not enough stock for this return");
+      }
+      if (error instanceof Error && error.message === "VENDOR_ID_REQUIRED") {
+        return badRequest("vendorId is required");
+      }
+      if (error instanceof Error && error.message === "VENDOR_PURCHASE_NOT_FOUND") {
+        return badRequest("no purchases found for this vendor and item");
+      }
+      return badRequest(error instanceof Error ? error.message : "failed to return stock to vendor");
+    }
+  }
+
+  async upsertVendorSkuMapping(
+    itemId: string,
+    event: APIGatewayProxyEventV2
+  ): Promise<APIGatewayProxyResultV2> {
+    try {
+      const body = parseBody<VendorSkuMappingBody>(event);
+      const updated = await this.inventoryService.upsertVendorSkuMapping(itemId, {
+        vendorId: String(body.vendorId || ""),
+        vendorSku: String(body.vendorSku || ""),
+        vendorItemName: body.vendorItemName,
+      });
+
+      return response(200, updated);
+    } catch (error) {
+      if (error instanceof Error && error.message === "ITEM_NOT_FOUND") {
+        return notFound("item not found");
+      }
+      if (error instanceof Error && error.message === "VENDOR_MAPPING_FIELDS_REQUIRED") {
+        return badRequest("vendorId and vendorSku are required");
+      }
+      return badRequest(error instanceof Error ? error.message : "failed to upsert vendor sku mapping");
     }
   }
 }

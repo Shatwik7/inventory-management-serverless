@@ -53,4 +53,17 @@ export class FinanceController {
       return badRequest(error instanceof Error ? error.message : "failed to record payment");
     }
   }
+
+  async payables(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+    try {
+      const date = event.queryStringParameters?.date || new Date().toISOString().slice(0, 10);
+      const result = await this.financeService.getPayables(date);
+      return response(200, result);
+    } catch (error) {
+      if (error instanceof Error && error.message === "INVALID_DATE") {
+        return badRequest("date must be a valid date (e.g. 2026-04-18)");
+      }
+      return badRequest(error instanceof Error ? error.message : "failed to fetch payables");
+    }
+  }
 }
