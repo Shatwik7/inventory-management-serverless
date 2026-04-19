@@ -1,2 +1,5 @@
 node_modules
 .serverless
+dist
+coverage
+reports
