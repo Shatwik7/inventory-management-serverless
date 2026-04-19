@@ -1,0 +1,107 @@
+image: node:20
+
+stages:
+  - lint
+  - build
+  - test
+  - deploy
+  - rollback
+
+variables:
+  SLS_STAGE: prod
+  SLS_DEBUG: "*"
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+
+.default_node_job: &default_node_job
+  before_script:
+    - npm ci
+
+lint:
+  stage: lint
+  <<: *default_node_job
+  script:
+    - npm run lint
+
+build:
+  stage: build
+  <<: *default_node_job
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 day
+
+test:
+  stage: test
+  <<: *default_node_job
+  script:
+    - npm test -- --coverage
+  coverage: '/Statements\s*:\s*([0-9.]+)%/'
+  artifacts:
+    when: always
+    paths:
+      - coverage/
+      - reports/junit/
+    reports:
+      junit: reports/junit/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+
+.deploy_base: &deploy_base
+  stage: deploy
+  before_script:
+    - npm ci
+    - npm install -g serverless
+  script:
+    - |
+      if [ -z "$SERVERLESS_ACCESS_KEY" ]; then
+        echo "SERVERLESS_ACCESS_KEY is required"
+        exit 1
+      fi
+    - |
+      if [ -z "$AUTH_JWT_SECRET" ]; then
+        echo "AUTH_JWT_SECRET is required"
+        exit 1
+      fi
+    - serverless deploy --stage "$SLS_STAGE" --verbose
+  environment:
+    name: production
+  when: manual
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+deploy:
+  <<: *deploy_base
+
+rollback:
+  stage: rollback
+  before_script:
+    - npm ci
+    - npm install -g serverless
+  script:
+    - |
+      if [ -z "$SERVERLESS_ACCESS_KEY" ]; then
+        echo "SERVERLESS_ACCESS_KEY is required"
+        exit 1
+      fi
+    - |
+      if [ -z "$ROLLBACK_TIMESTAMP" ]; then
+        echo "ROLLBACK_TIMESTAMP is required (example: 2026-04-19T10:45:00.000Z)"
+        exit 1
+      fi
+    - serverless rollback --timestamp "$ROLLBACK_TIMESTAMP" --stage "$SLS_STAGE" --verbose
+  environment:
+    name: production
+  when: manual
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
